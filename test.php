@@ -533,4 +533,22 @@ class MedooTest extends PHPUnit_Framework_TestCase {
         $this->db->debug()->distinct()->count('account', 'age');
         $this->expectOutputString('SELECT COUNT(DISTINCT "age") FROM "account"');
     }
+    public function testOracleLimit() {
+        $this->db->setDatabaseType('oracle');
+
+        $this->assertEquals(
+            ' FETCH FIRST 10 ROWS ONLY',
+            $this->db->where_clause(array(
+                'LIMIT' => 10
+            )
+        ));
+        $this->assertEquals(
+            ' OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY',
+            $this->db->where_clause(array(
+                'LIMIT' => array(10, 10)
+            )
+        ));
+
+        $this->db->setDatabaseType('sqlite');
+    }
 }
