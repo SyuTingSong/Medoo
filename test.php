@@ -3,6 +3,10 @@
 require_once('medoo.php');
 
 class TestProtected extends medoo {
+    public function select_ctx($table, $join, $columns = null, $where = null, $column_fn = null) {
+        return parent::select_context($table, $join, $columns, $where, $column_fn);
+    }
+
     public function column_quote($string) {
         return parent::column_quote($string);
     }
@@ -13,6 +17,9 @@ class TestProtected extends medoo {
 
     public function setDatabaseType($type) {
         $this->database_type = $type;
+    }
+    public function getProp($name) {
+        return $this->$name;
     }
 }
 
@@ -292,22 +299,215 @@ class MedooTest extends PHPUnit_Framework_TestCase {
             )
         );
     }
+
     public function testPgLimit() {
         $this->db->setDatabaseType('pgsql');
 
         $this->assertEquals(
             ' LIMIT 10',
             $this->db->where_clause(array(
-                'LIMIT' => 10
-            )
-        ));
+                    'LIMIT' => 10
+                )
+            ));
         $this->assertEquals(
             ' OFFSET 10 LIMIT 10',
             $this->db->where_clause(array(
-                'LIMIT' => array(10, 10)
-            )
-        ));
+                    'LIMIT' => array(10, 10)
+                )
+            ));
 
         $this->db->setDatabaseType('sqlite');
+    }
+
+    /**
+     * @param $expected
+     * @param $args
+     * @dataProvider selectDataProvider
+     */
+    public function testSelect($expected, $args) {
+        $this->assertEquals(
+            $expected, call_user_func_array(
+            array($this->db, 'select_ctx'),
+            $args
+        ));
+    }
+
+    public function selectDataProvider() {
+        return array(
+            // Table column
+            array(
+                'SELECT * FROM "account"',
+                array('account', '*'),
+            ),
+            array(
+                'SELECT "user_name","email" FROM "account"',
+                array('account', array(
+                    'user_name',
+                    'email',
+                )),
+            ),
+            array(
+                'SELECT "user_name","email" FROM "account" ORDER BY "user_name" ASC LIMIT 10',
+                array(
+                    'account',
+                    array('user_name', 'email'),
+                    array(
+                        'ORDER' => 'user_name ASC',
+                        'LIMIT' => 10
+                    )
+                )
+            ),
+            // Table join
+            array(
+                'SELECT "post".*,"account"."user_id" FROM "post" LEFT JOIN "account" ON "post"."author_id" = "account"."user_id"',
+                array(
+                    'post',
+                    array('[>]account' => array('author_id' => 'user_id')),
+                    array('post.*', 'account.user_id'),
+                ),
+            ),
+            array(
+                'SELECT * FROM "account" INNER JOIN "album" USING ("user_id")',
+                array(
+                    'account',
+                    array('[><]album' => 'user_id'),
+                    '*',
+                )
+            ),
+            array(
+                'SELECT * FROM "account" FULL JOIN "photo" USING ("user_id", "avatar_id")',
+                array(
+                    'account',
+                    array('[<>]photo' => array('user_id', 'avatar_id')),
+                    '*',
+                )
+            ),
+            array(
+                'SELECT * FROM "account" RIGHT JOIN "account" AS "b" ON "account"."user_id" = "b"."promotor_id"',
+                array(
+                    'account',
+                    array(
+                        '[<]account(b)' => array('user_id' => 'promotor_id'),
+                    ),
+                    '*'
+                )
+            ),
+            array(
+                'SELECT * FROM "post" INNER JOIN "account" ON "post"."author_id" = "account"."user_id" INNER JOIN "album" ON "account"."user_id" = "album"."user_id"',
+                array(
+                    'post',
+                    array(
+                        '[><]account' => array('author_id' => 'user_id'),
+                        '[><]album' => array('account.user_id' => 'user_id'),
+                    ),
+                    '*'
+                )
+            ),
+            array(
+                'SELECT * FROM "album" LEFT JOIN "account" ON "album"."user_id" = "account"."user_id" AND "album"."user_type" = "account"."type"',
+                array(
+                    'album',
+                    array(
+                        '[>]account' => array(
+                            'user_id' => 'user_id',
+                            'user_type' => 'type',
+                        )
+                    ),
+                    '*'
+                )
+            ),
+            //Column Alias
+            array(
+                'SELECT "user_id","nickname" AS "my_nickname" FROM "account" LIMIT 20',
+                array(
+                    'account',
+                    array(
+                        'user_id',
+                        'nickname(my_nickname)'
+                    ),
+                    array('LIMIT' => 20),
+                )
+            ),
+            // one string column
+            array(
+                'SELECT "user_id" FROM "account"',
+                array(
+                    'account',
+                    'user_id',
+                )
+            ),
+            // Column Function
+            array(
+                'SELECT COUNT(*) FROM "account"',
+                array(
+                    'account',
+                    null,
+                    '*',
+                    null,
+                    'COUNT'
+                )
+            ),
+            array(
+                'SELECT MAX("age") FROM "account" LEFT JOIN "photo" USING ("user_id") WHERE "gender" = \'female\'',
+                array(
+                    'account',
+                    array('[>]photo' => array('user_id')),
+                    'age',
+                    array('gender' => 'female'),
+                    'MAX'
+                )
+            ),
+            array(
+                'SELECT COUNT(*) FROM "account" WHERE "gender" = \'female\'',
+                array(
+                    'account',
+                    array(
+                        'gender' => 'female'
+                    ),
+                    null,
+                    null,
+                    'COUNT'
+                )
+            ),
+            array(
+                'SELECT COUNT(*) FROM "account" WHERE "gender" = \'female\'',
+                array(
+                    'account',
+                    array(
+                        'gender' => 'female'
+                    ),
+                    null,
+                    array(),
+                    'COUNT'
+                )
+            ),
+            // for has()
+            array(
+                'SELECT 1 FROM "account"',
+                array(
+                    'account',
+                    null,
+                    null,
+                    null,
+                    '1'
+                )
+            )
+        );
+    }
+
+    public function testFetchClass() {
+        $r = $this->db->fetch_class('abc', array('const'));
+        $this->assertInstanceOf('medoo', $r);
+        $fc = $r->getProp('fetch_class');
+        $this->assertTrue(is_array($fc));
+        $this->assertEquals('abc', $fc['name']);
+        $this->assertEquals(1, count($fc['ctorargs']));
+        $this->assertTrue($fc['once']);
+    }
+    public function testDisableFetchClass() {
+        $r = $this->db->fetch_class(false);
+        $this->assertInstanceOf('medoo', $r);
+        $fc = $r->getProp('fetch_class');
+        $this->assertNull($fc);
     }
 }
