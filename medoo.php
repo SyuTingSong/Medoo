@@ -678,7 +678,15 @@ class medoo
 					$where = $join;
 				}
 
-				$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				if ($this->distinct_mode)
+				{
+					$this->distinct_mode = false;
+					$column = $column_fn . '(DISTINCT ' . $this->column_push($columns) . ')';
+				}
+				else
+				{
+					$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				}
 			}
 		}
 		else
@@ -689,6 +697,7 @@ class medoo
 		if($this->distinct_mode)
 		{
 			$distinct = 'DISTINCT ';
+			$this->distinct_mode = false;
 		} else {
 			$distinct = '';
 		}
