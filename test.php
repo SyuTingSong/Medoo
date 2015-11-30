@@ -510,4 +510,22 @@ class MedooTest extends PHPUnit_Framework_TestCase {
         $fc = $r->getProp('fetch_class');
         $this->assertNull($fc);
     }
+    public function testDistinct() {
+        $sql = $this->db->distinct()->select_ctx('account', 'age', array('gender' => 'female'));
+        $this->assertEquals(
+            'SELECT DISTINCT "age" FROM "account" WHERE "gender" = \'female\'',
+            $sql
+        );
+        // make sure distinct auto reset
+        $sql = $this->db->select_ctx('account', 'age', array('gender' => 'female'));
+        $this->assertEquals(
+            'SELECT "age" FROM "account" WHERE "gender" = \'female\'',
+            $sql,
+            'DISTINCT status havn\'t reset automatically'
+        );
+    }
+    public function testDistinctCount() {
+        $this->db->debug()->distinct()->count('account', 'age');
+        $this->expectOutputString('SELECT COUNT(DISTINCT "age") FROM "account"');
+    }
 }
