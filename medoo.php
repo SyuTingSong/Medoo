@@ -40,6 +40,8 @@ class medoo
 	protected $logs = array();
 
 	protected $debug_mode = false;
+	
+	protected $distinct_mode = false;
 
 	protected $fetch_class = null;
 
@@ -663,7 +665,15 @@ class medoo
 					$where = $join;
 				}
 
-				$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				if ($this->distinct_mode)
+				{
+					$this->distinct_mode = false;
+					$column = $column_fn . '(DISTINCT ' . $this->column_push($columns) . ')';
+				}
+				else
+				{
+					$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				}
 			}
 		}
 		else
@@ -671,7 +681,15 @@ class medoo
 			$column = $this->column_push($columns);
 		}
 
-		return 'SELECT ' . $column . ' FROM ' . $table . $this->where_clause($where);
+		if($this->distinct_mode)
+		{
+			$distinct = 'DISTINCT ';
+			$this->distinct_mode = false;
+		} else {
+			$distinct = '';
+		}
+
+		return 'SELECT ' . $distinct . $column . ' FROM ' . $table . $this->where_clause($where);
 	}
 
 	public function fetch_class($className='stdClass', $ctorargs=array(), $once=true)
@@ -974,6 +992,13 @@ class medoo
 	public function debug()
 	{
 		$this->debug_mode = true;
+
+		return $this;
+	}
+	
+	public function distinct()
+	{
+		$this->distinct_mode = true;
 
 		return $this;
 	}
