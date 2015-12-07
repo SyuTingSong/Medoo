@@ -362,7 +362,17 @@ class medoo
 
 							foreach ($value as $item)
 							{
-								if (preg_match('/^(?!%).+(?<!%)$/', $item))
+								$suffix = mb_substr($item, -1, 1); 
+								
+								if ($suffix === '_') 
+								{
+									$item = substr_replace($item, '%', -1);
+								} 
+								elseif ($suffix === '%') 
+								{
+									$item = '%' . substr_replace($item, '', -1, 1);
+								} 
+								elseif (preg_match('/^(?!%).+(?<!%)$/', $item)) 
 								{
 									$item = '%' . $item . '%';
 								}
@@ -591,7 +601,7 @@ class medoo
 
 							foreach ($relation as $key => $value)
 							{
-								$joins[] = (
+								$joins[] = $this->prefix . (
 									strpos($key, '.') > 0 ?
 										// For ['tableB.column' => 'column']
 										'"' . str_replace('.', '"."', $key) . '"' :
@@ -608,6 +618,7 @@ class medoo
 					}
 
 					$table_join[] = $join_array[ $match[ 'join_mode' ] ] . ' JOIN "' . $join_table . '" ' . (isset($alias_table) ?  'AS "' . $alias_table . '" ' : '') . $relation;
+
 				}
 			}
 
