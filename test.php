@@ -215,12 +215,10 @@ class MedooTest extends PHPUnit_Framework_TestCase {
             array(
                 ' WHERE "city" LIKE \'%stan\'',
                 array('city[~]' => 'stan%'), // Kazakhstan,  Uzbekistan, Türkmenistan...
-                true, // skipped
             ),
             array(
-                ' WHERE "city" LIKE \'Londo_\'',
+                ' WHERE "city" LIKE \'Londo%\'',
                 array('city[~]' => 'Londo_'), // London, Londox, Londos...
-                true, // skipped
             ),
             array(
                 ' WHERE "name" LIKE \'[BCR]at\'',
@@ -229,7 +227,7 @@ class MedooTest extends PHPUnit_Framework_TestCase {
             ),
             array(
                 ' WHERE "name" LIKE \'[^BCR]at\'',
-                array('city[~]' => '[!BCR]at'),// Eat, Fat, Hat
+                array('name[~]' => '[!BCR]at'),// Eat, Fat, Hat
                 true, // skipped
             ),
             //Order Condition
