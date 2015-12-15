@@ -966,35 +966,18 @@ class medoo
 		return $output;
 	}
 
-	public function isAlive()
+	public function is_alive()
 	{
-		if($this->pdo == null)
-			return false;
-
-		$old_errlevel = 0;
-
 		try
 		{
-			// supress warning if timed out
-			$old_errlevel = error_reporting(0);
-
 			// test the connection by doing a simple query & checking the result
 			// will give "Warning: PDO::query(): MySQL server has gone away" if not supressed
-			if($this->query("SELECT 1") == false)
-				// throw an excecption to avoid duplicate code when the exception attribute is set
-				throw new PDOException("Timed out.");
+			return $this->pdo instanceof PDO && $this->pdo->query('SELECT 1') !== false;
 		}
-		catch (PDOException $e)
+		catch (PDOException $e) //if enabled PDO::ERRMODE_EXCEPTION
 		{
-			// set error reporting back to its old level & return false
-			error_reporting($old_errlevel);
 			return false;
 		}
-
-		// set error reporting back to its old level & return true
-		error_reporting($old_errlevel);
-		return true;
-
 	}
 }
 ?>
