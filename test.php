@@ -290,6 +290,13 @@ class MedooTest extends PHPUnit_Framework_TestCase {
                     'LIMIT' => array(20, 100),
                 )
             ),
+            // Multi-Cols GROUP BY
+            array(
+                ' GROUP BY "type", "name"',
+                array(
+                    'GROUP' => array('type', 'name')
+                )
+            ),
             // Pass SQL partial directly
             array(
                 ' WHERE name = \'foo\' AND email = \'foo@bar.com\' ORDER BY id ASC',
