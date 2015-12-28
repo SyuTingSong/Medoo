@@ -18,6 +18,7 @@ class TestProtected extends medoo {
     public function setDatabaseType($type) {
         $this->database_type = $type;
     }
+
     public function getProp($name) {
         return $this->$name;
     }
@@ -199,6 +200,10 @@ class MedooTest extends PHPUnit_Framework_TestCase {
             array(
                 ' WHERE "city" LIKE \'%lon%\'',
                 array('city[~]' => 'lon'),
+            ),
+            array(
+                ' WHERE "city" LIKE \'%123%\'',
+                array('city[~]' => 123),
             ),
             array(
                 ' WHERE "city" LIKE \'%lon%\' OR "city" LIKE \'%foo%\' OR "city" LIKE \'%bar%\'',
@@ -500,7 +505,11 @@ class MedooTest extends PHPUnit_Framework_TestCase {
         );
     }
 
+    /**
+     * @requires function medoo::fetch_class
+     */
     public function testFetchClass() {
+
         $r = $this->db->fetch_class('abc', array('const'));
         $this->assertInstanceOf('medoo', $r);
         $fc = $r->getProp('fetch_class');
@@ -509,12 +518,20 @@ class MedooTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(1, count($fc['ctorargs']));
         $this->assertTrue($fc['once']);
     }
+
+    /**
+     * @requires function medoo::fetch_class
+     */
     public function testDisableFetchClass() {
         $r = $this->db->fetch_class(false);
         $this->assertInstanceOf('medoo', $r);
         $fc = $r->getProp('fetch_class');
         $this->assertNull($fc);
     }
+
+    /**
+     * @requires function medoo::distinct
+     */
     public function testDistinct() {
         $sql = $this->db->distinct()->select_ctx('account', 'age', array('gender' => 'female'));
         $this->assertEquals(
@@ -529,6 +546,10 @@ class MedooTest extends PHPUnit_Framework_TestCase {
             'DISTINCT status havn\'t reset automatically'
         );
     }
+
+    /**
+     * @requires function medoo::distinct
+     */
     public function testDistinctCount() {
         $this->db->debug()->distinct()->count('account', 'age');
         $this->expectOutputString('SELECT COUNT(DISTINCT "age") FROM "account"');
@@ -540,15 +561,15 @@ class MedooTest extends PHPUnit_Framework_TestCase {
         $this->assertEquals(
             ' FETCH FIRST 10 ROWS ONLY',
             $this->db->where_clause(array(
-                'LIMIT' => 10
-            )
-        ));
+                    'LIMIT' => 10
+                )
+            ));
         $this->assertEquals(
             ' OFFSET 10 ROWS FETCH NEXT 10 ROWS ONLY',
             $this->db->where_clause(array(
-                'LIMIT' => array(10, 10)
-            )
-        ));
+                    'LIMIT' => array(10, 10)
+                )
+            ));
 
         $this->db->setDatabaseType('sqlite');
     }
