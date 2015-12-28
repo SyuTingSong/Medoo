@@ -11,6 +11,7 @@
 * Column array allow `table_name.*` when using multi columns #309
 * Multi-Columns GROUP is supported for #333
 * When using oracle LIMIT generates `OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY` like cause.
+* Distinct support for #235
 
 ## [Medoo](http://medoo.in)
 
