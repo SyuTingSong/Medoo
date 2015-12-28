@@ -40,6 +40,10 @@ class medoo
 	protected $logs = array();
 
 	protected $debug_mode = false;
+	
+	protected $distinct_mode = false;
+
+	protected $fetch_class = null;
 
 	public function __construct($options = null)
 	{
@@ -190,7 +194,22 @@ class medoo
 
 	protected function column_quote($string)
 	{
-		return '"' . $this->prefix . str_replace('.', '"."', preg_replace('/(^#|\(JSON\)\s*)/', '', $string)) . '"';
+		$string = preg_replace('/(^#|\(JSON\)\s*)/', '', $string);
+
+		if ($string === '*') {
+			return '*';
+		}
+
+		if (($p = strpos($string, '.')) > 0) // table.column
+		{
+			if ($string[$p + 1] === '*') // table.*
+			{
+				return '"' . $this->prefix . substr($string, 0, $p) . '".*';
+			}
+
+			$string = $this->prefix . $string;
+		}
+		return '"' . str_replace('.', '"."', $string) . '"';
 	}
 
 	protected function column_push($columns)
@@ -207,7 +226,7 @@ class medoo
 
 		$stack = array();
 
-		foreach ($columns as $key => $value)
+		foreach ($columns as $value)
 		{
 			preg_match('/([a-zA-Z0-9_\-\.]*)\s*\(([a-zA-Z0-9_\-]*)\)/i', $value, $match);
 
@@ -276,12 +295,12 @@ class medoo
 			}
 			else
 			{
-				preg_match('/(#?)([\w\.\-]+)(\[(\>|\>\=|\<|\<\=|\!|\<\>|\>\<|\!?~)\])?/i', $key, $match);
-				$column = $this->column_quote($match[ 2 ]);
+				preg_match('/(#?)(?P<column>[\w\.\-]+)(\[(?P<operator>\>|\>\=|\<|\<\=|\!|\<\>|\>\<|\!?~)\])?/i', $key, $match);
+				$column = $this->column_quote($match[ 'column' ]);
 
-				if (isset($match[ 4 ]))
+				if (isset($match[ 'operator' ]))
 				{
-					$operator = $match[ 4 ];
+					$operator = $match[ 'operator' ];
 
 					if ($operator == '!')
 					{
@@ -450,13 +469,15 @@ class medoo
 
 				if (is_array($MATCH) && isset($MATCH[ 'columns' ], $MATCH[ 'keyword' ]))
 				{
-					$where_clause .= ($where_clause != '' ? ' AND ' : ' WHERE ') . ' MATCH ("' . str_replace('.', '"."', implode($MATCH[ 'columns' ], '", "')) . '") AGAINST (' . $this->quote($MATCH[ 'keyword' ]) . ')';
+					$where_clause .= ($where_clause != '' ? ' AND ' : ' WHERE ') . 'MATCH ("' . str_replace('.', '"."', implode($MATCH[ 'columns' ], '", "')) . '") AGAINST (' . $this->quote($MATCH[ 'keyword' ]) . ')';
 				}
 			}
 
 			if (isset($where[ 'GROUP' ]))
 			{
-				$where_clause .= ' GROUP BY ' . $this->column_quote($where[ 'GROUP' ]);
+				$GROUP = is_array($where['GROUP']) ? $where['GROUP'] : array($where['GROUP']);
+				$where_clause .= ' GROUP BY ' .
+					implode(', ', array_map(array($this, 'column_quote'), $GROUP));
 
 				if (isset($where[ 'HAVING' ]))
 				{
@@ -466,7 +487,7 @@ class medoo
 
 			if (isset($where[ 'ORDER' ]))
 			{
-				$rsort = '/(^[a-zA-Z0-9_\-\.]*)(\s*(DESC|ASC))?/';
+				$rsort = '/(?P<column>^[a-zA-Z0-9_\-\.]*)(\s*(?P<order>DESC|ASC))?/';
 				$ORDER = $where[ 'ORDER' ];
 
 				if (is_array($ORDER))
@@ -486,7 +507,7 @@ class medoo
 						{
 							preg_match($rsort, $column, $order_match);
 
-							array_push($stack, '"' . str_replace('.', '"."', $order_match[ 1 ]) . '"' . (isset($order_match[ 3 ]) ? ' ' . $order_match[ 3 ] : ''));
+							array_push($stack, $this->column_quote($order_match['column']) . (isset($order_match[ 'order' ]) ? ' ' . $order_match[ 'order' ] : ''));
 						}
 
 						$where_clause .= ' ORDER BY ' . implode($stack, ',');
@@ -496,7 +517,7 @@ class medoo
 				{
 					preg_match($rsort, $ORDER, $order_match);
 
-					$where_clause .= ' ORDER BY "' . str_replace('.', '"."', $order_match[ 1 ]) . '"' . (isset($order_match[ 3 ]) ? ' ' . $order_match[ 3 ] : '');
+					$where_clause .= ' ORDER BY ' . $this->column_quote($order_match['column']) . (isset($order_match[ 'order' ]) ? ' ' . $order_match[ 'order' ] : '');
 				}
 			}
 
@@ -506,7 +527,14 @@ class medoo
 
 				if (is_numeric($LIMIT))
 				{
-					$where_clause .= ' LIMIT ' . $LIMIT;
+					if ($this->database_type === 'oracle')
+					{
+						$where_clause .= ' FETCH FIRST ' . $LIMIT . ' ROWS ONLY';
+					}
+					else
+					{
+						$where_clause .= ' LIMIT ' . $LIMIT;
+					}
 				}
 
 				if (
@@ -518,6 +546,10 @@ class medoo
 					if ($this->database_type === 'pgsql')
 					{
 						$where_clause .= ' OFFSET ' . $LIMIT[ 0 ] . ' LIMIT ' . $LIMIT[ 1 ];
+					}
+					elseif ($this->database_type === 'oracle')
+					{
+						$where_clause .= ' OFFSET ' . $LIMIT[ 0 ] . ' ROWS FETCH NEXT ' . $LIMIT[ 1 ] . ' ROWS ONLY';
 					}
 					else
 					{
@@ -558,10 +590,12 @@ class medoo
 
 			foreach($join as $sub_table => $relation)
 			{
-				preg_match('/(\[(\<|\>|\>\<|\<\>)\])?([a-zA-Z0-9_\-]*)\s?(\(([a-zA-Z0-9_\-]*)\))?/', $sub_table, $match);
+				preg_match('/(\[(?P<join_mode>\<|\>|\>\<|\<\>)\])?(?P<table>[a-zA-Z0-9_\-]*)\s?(\((?P<alias>[a-zA-Z0-9_\-]*)\))?/', $sub_table, $match);
 
-				if ($match[ 2 ] != '' && $match[ 3 ] != '')
+				if ($match['join_mode'] != '' && $match['table'] != '')
 				{
+					$join_table = $this->prefix . $match['table'];
+					$alias_table = isset($match['alias']) ? $this->prefix . $match['alias'] : null;
 					if (is_string($relation))
 					{
 						$relation = 'USING ("' . $relation . '")';
@@ -589,14 +623,15 @@ class medoo
 										$table . '."' . $key . '"'
 								) .
 								' = ' .
-								'"' . (isset($match[ 5 ]) ? $match[ 5 ] : $match[ 3 ]) . '"."' . $value . '"';
+								'"' . (isset($alias_table) ? $alias_table : $join_table) . '"."' . $value . '"';
 							}
 
 							$relation = 'ON ' . implode($joins, ' AND ');
 						}
 					}
 
-					$table_join[] = $join_array[ $match[ 2 ] ] . ' JOIN "' . $this->prefix . $match[ 3 ] . '" ' . (isset($match[ 5 ]) ?  'AS "' . $match[ 5 ] . '" ' : '') . $relation;
+					$table_join[] = $join_array[ $match[ 'join_mode' ] ] . ' JOIN "' . $join_table . '" ' . (isset($alias_table) ?  'AS "' . $alias_table . '" ' : '') . $relation;
+
 				}
 			}
 
@@ -654,7 +689,15 @@ class medoo
 					$where = $join;
 				}
 
-				$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				if ($this->distinct_mode)
+				{
+					$this->distinct_mode = false;
+					$column = $column_fn . '(DISTINCT ' . $this->column_push($columns) . ')';
+				}
+				else
+				{
+					$column = $column_fn . '(' . $this->column_push($columns) . ')';
+				}
 			}
 		}
 		else
@@ -662,16 +705,50 @@ class medoo
 			$column = $this->column_push($columns);
 		}
 
-		return 'SELECT ' . $column . ' FROM ' . $table . $this->where_clause($where);
+		if($this->distinct_mode)
+		{
+			$distinct = 'DISTINCT ';
+			$this->distinct_mode = false;
+		} else {
+			$distinct = '';
+		}
+
+		return 'SELECT ' . $distinct . $column . ' FROM ' . $table . $this->where_clause($where);
+	}
+
+	public function fetch_class($className='stdClass', $ctorargs=array(), $once=true)
+	{
+		if ($className) {
+			$this->fetch_class = array (
+				'name' => $className,
+				'ctorargs' => $ctorargs,
+				'once' => $once,
+			);
+		} else {
+			$this->fetch_class = null;
+		}
+		return $this;
 	}
 
 	public function select($table, $join, $columns = null, $where = null)
 	{
 		$query = $this->query($this->select_context($table, $join, $columns, $where));
 
-		return $query ? $query->fetchAll(
+		if (!$query)
+			return false;
+
+		if (isset($this->fetch_class)) {
+			$class = $this->fetch_class['name'];
+			$ctorargs = $this->fetch_class['ctorargs'];
+			if ($this->fetch_class['once']) {
+				$this->fetch_class = null;
+			}
+			return $query->fetchAll(PDO::FETCH_CLASS, $class, $ctorargs);
+		}
+
+		return $query->fetchAll(
 			(is_string($columns) && $columns != '*') ? PDO::FETCH_COLUMN : PDO::FETCH_ASSOC
-		) : false;
+		);
 	}
 
 	public function insert($table, $datas)
@@ -827,7 +904,22 @@ class medoo
 
 		if ($query)
 		{
-			$data = $query->fetchAll(PDO::FETCH_ASSOC);
+			if ($this->fetch_class)
+			{
+				$data = $query->fetchAll(
+					PDO::FETCH_CLASS,
+					$this->fetch_class['name'],
+					$this->fetch_class['ctorargs']
+				);
+				if ($this->fetch_class['once'])
+				{
+					$this->fetch_class = null;
+				}
+			}
+			else
+			{
+				$data = $query->fetchAll(PDO::FETCH_ASSOC);
+			}
 
 			if (isset($data[ 0 ]))
 			{
@@ -939,6 +1031,13 @@ class medoo
 	public function debug()
 	{
 		$this->debug_mode = true;
+
+		return $this;
+	}
+	
+	public function distinct()
+	{
+		$this->distinct_mode = true;
 
 		return $this;
 	}
