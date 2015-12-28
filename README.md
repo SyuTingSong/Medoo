@@ -7,11 +7,11 @@
 ### Different From Medoo Official Version
 
 * Unit Tests & Travis-CI enabled
-* `fetch_class` for issue #308
-* Column array allow `table_name.*` when using multi columns #309
-* Multi-Columns GROUP is supported for #333
+* `fetch_class` for issue [#308](https://github.com/catfan/Medoo/issues/308)
+* Column array allow `table_name.*` when using multi columns [#309](https://github.com/catfan/Medoo/issues/309)
+* Multi-Columns GROUP is supported for [#333](https://github.com/catfan/Medoo/issues/333)
 * When using oracle LIMIT generates `OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY` like cause.
-* Distinct support for #235
+* Distinct support for [#235](https://github.com/catfan/Medoo/issues/235)
 
 ## [Medoo](http://medoo.in)
 
