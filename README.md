@@ -1,5 +1,17 @@
 ![](https://raw.githubusercontent.com/catfan/Medoo/develop/src/medoo-logo.png)
 
+## TSD
+
+> TingSong's Distribution
+
+### Different From Medoo Official Version
+
+* Unit Tests & Travis-CI enabled
+* `fetch_class` for issue #308
+* Column array allow `table_name.*` when using multi columns #309
+* Multi-Columns GROUP is supported for #333
+* When using oracle LIMIT generates `OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY` like cause.
+
 ## [Medoo](http://medoo.in)
 
 > The Lightest PHP database framework to accelerate development
