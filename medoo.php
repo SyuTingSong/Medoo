@@ -527,7 +527,14 @@ class medoo
 
 				if (is_numeric($LIMIT))
 				{
-					$where_clause .= ' LIMIT ' . $LIMIT;
+					if ($this->database_type === 'oracle')
+					{
+						$where_clause .= ' FETCH FIRST ' . $LIMIT . ' ROWS ONLY';
+					}
+					else
+					{
+						$where_clause .= ' LIMIT ' . $LIMIT;
+					}
 				}
 
 				if (
@@ -539,6 +546,10 @@ class medoo
 					if ($this->database_type === 'pgsql')
 					{
 						$where_clause .= ' OFFSET ' . $LIMIT[ 0 ] . ' LIMIT ' . $LIMIT[ 1 ];
+					}
+					elseif ($this->database_type === 'oracle')
+					{
+						$where_clause .= ' OFFSET ' . $LIMIT[ 0 ] . ' ROWS FETCH NEXT ' . $LIMIT[ 1 ] . ' ROWS ONLY';
 					}
 					else
 					{
