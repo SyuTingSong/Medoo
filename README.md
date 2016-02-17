@@ -81,7 +81,7 @@ Keep it simple and keep it clear.
 
 ## License
 
-Medoo is under the MIT License.
+Medoo is under the MIT license.
 
 ## Links
 
